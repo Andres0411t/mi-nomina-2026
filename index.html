@@ -18,7 +18,7 @@
                 <p class="text-sm font-bold text-slate-400">Control Total Quincenal • Colombia 2026</p>
             </div>
             <div class="text-right">
-                <span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full uppercase">Versión 4.1</span>
+                <span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full uppercase">Versión 4.2</span>
             </div>
         </header>
 
@@ -110,6 +110,20 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="mt-8 pt-6 border-t border-slate-100">
+                    <h3 class="font-black text-slate-400 text-xs uppercase tracking-tighter mb-4">Copia de Seguridad y Datos</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <button onclick="downloadBackup()" class="bg-slate-100 text-slate-700 py-3 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
+                            📥 Descargar Backup (.json)
+                        </button>
+                        <label class="bg-slate-100 text-slate-700 py-3 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                            📤 Subir Backup
+                            <input type="file" id="importFile" class="hidden" onchange="importBackup(event)">
+                        </label>
+                    </div>
+                </div>
+
                 <div class="mt-8 p-6 bg-slate-50 rounded-2xl border-2 border-slate-100">
                     <h3 class="font-black text-slate-800 text-sm uppercase mb-4">Días Festivos 2026 Cargados</h3>
                     <div id="festivosList" class="flex flex-wrap gap-2"></div>
@@ -157,8 +171,12 @@
 
             if (tipo === 'NORMAL') {
                 registro.pagaTransporte = true;
-                let start = new Date(`${fecha}T${document.getElementById('hInicio').value}`);
-                let end = new Date(`${fecha}T${document.getElementById('hFin').value}`);
+                let hI = document.getElementById('hInicio').value;
+                let hF = document.getElementById('hFin').value;
+                if(!hI || !hF) return alert("Ingresa entrada y salida");
+
+                let start = new Date(`${fecha}T${hI}`);
+                let end = new Date(`${fecha}T${hF}`);
                 if (end <= start) end.setDate(end.getDate() + 1);
 
                 let bO = document.getElementById('hBreakOut').value;
@@ -278,6 +296,7 @@
 
         function deleteReg(f) { if(confirm("¿Eliminar este registro?")){ db = db.filter(x => x.fecha !== f); localStorage.setItem('db_v4', JSON.stringify(db)); renderAll(); } }
         function clearQuincena() { if(confirm("⚠️ ¿Deseas borrar toda la quincena?")){ db = []; localStorage.setItem('db_v4', JSON.stringify(db)); renderAll(); } }
+        
         function saveConfig() {
             cfg.hora = parseFloat(document.getElementById('cfgHora').value);
             cfg.auxTranspMensual = parseFloat(document.getElementById('cfgTransp').value);
@@ -290,23 +309,72 @@
             renderAll();
         }
 
+        // --- FUNCIONES DE EXPORTACIÓN ---
+
+        function downloadBackup() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "backup_nomina_2026.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedDb = JSON.parse(e.target.result);
+                    if(Array.isArray(importedDb)) {
+                        db = importedDb;
+                        localStorage.setItem('db_v4', JSON.stringify(db));
+                        renderAll();
+                        alert("✅ Datos importados con éxito");
+                    }
+                } catch (err) { alert("Error al leer el archivo"); }
+            };
+            reader.readAsText(file);
+        }
+
         function exportarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            doc.text("REPORTE DE NÓMINA", 14, 20);
+            doc.setFontSize(18);
+            doc.text("REPORTE DE NÓMINA QUINCENAL", 14, 20);
+            doc.setFontSize(10);
+            doc.text("Generado por Calculador de Nómina 2026", 14, 28);
+            
             const rows = db.map(r => [r.fecha, r.tipo, format.format(r.pagoSalarial)]);
-            doc.autoTable({ startY: 30, head: [['Fecha', 'Tipo', 'Pago']], body: rows });
+            doc.autoTable({ startY: 35, head: [['Fecha', 'Estado/Turno', 'Valor Salarial']], body: rows, theme: 'striped' });
+            
             doc.save(`Nomina_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
         function exportarExcel() {
-            const data = db.map(r => ({ Fecha: r.fecha, Tipo: r.tipo, Pago: r.pagoSalarial }));
-            const ws = XLSX.utils.json_to_sheet(data);
+            // reporte detallado  Excel
+            const reporte = db.map(r => {
+                let d = r.desglose;
+                return {
+                    Fecha: r.fecha,
+                    Tipo: r.tipo,
+                    Diagnostico: r.diag || "-",
+                    'Horas Ord': d.ordD?.h || 0,
+                    'Rec Noct': d.ordN?.h || 0,
+                    'Extras': (parseFloat(d.extD?.h || 0) + parseFloat(d.extN?.h || 0)).toFixed(2),
+                    'Festivos': (parseFloat(d.domD?.h || 0) + parseFloat(d.domN?.h || 0)).toFixed(2),
+                    'Total Pago Dia': r.pagoSalarial
+                };
+            });
+            const ws = XLSX.utils.json_to_sheet(reporte);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Quincena");
-            XLSX.writeFile(wb, "Nomina.xlsx");
+            XLSX.utils.book_append_sheet(wb, ws, "Detalle Quincena");
+            XLSX.writeFile(wb, "Reporte_Nomina_2026.xlsx");
         }
 
+        // Inicialización
         document.getElementById('cfgHora').value = cfg.hora;
         document.getElementById('cfgTransp').value = cfg.auxTranspMensual;
         document.getElementById('cfgRN').value = cfg.rn;
