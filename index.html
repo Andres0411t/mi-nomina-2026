@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculador de Nómina</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-900 font-sans">
+
+    <div class="max-w-5xl mx-auto p-4 sm:p-8">
+        <header class="mb-8 flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div>
+                <h1 class="text-3xl font-black text-indigo-900 uppercase">Calculador de Nómina</h1>
+                <p class="text-sm font-bold text-slate-400">Control Total Quincenal • Colombia 2026</p>
+            </div>
+            <div class="text-right">
+                <span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full uppercase">Versión 4.1</span>
+            </div>
+        </header>
+
+        <nav class="flex gap-2 mb-8 bg-white p-2 rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+            <button onclick="showTab('registro')" class="tab-btn flex-1 py-3 px-4 rounded-lg font-bold transition-all bg-indigo-600 text-white shadow-lg">Registros</button>
+            <button onclick="showTab('resumen')" class="tab-btn flex-1 py-3 px-4 rounded-lg font-bold transition-all text-slate-500 hover:bg-slate-50">Nómina</button>
+            <button onclick="showTab('config')" class="tab-btn flex-1 py-3 px-4 rounded-lg font-bold transition-all text-slate-500 hover:bg-slate-50">Ajustes</button>
+        </nav>
+
+        <div id="registro" class="tab-content block animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div class="bg-white p-6 rounded-2xl shadow-xl border border-slate-200">
+                <form id="formTurno" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label class="text-xs font-black text-slate-400 uppercase tracking-widest">Fecha de Inicio</label>
+                            <input type="date" id="fecha" required class="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-indigo-500 outline-none transition-all font-bold">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-xs font-black text-slate-400 uppercase tracking-widest">Estado</label>
+                            <select id="tipoDia" onchange="toggleTipoDia()" class="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold cursor-pointer">
+                                <option value="NORMAL">✅ Turno Laborado</option>
+                                <option value="COMPENSATORIO">🌟 Compensatorio Remunerado</option>
+                                <option value="INCAPACIDAD">🏥 Incapacidad</option>
+                                <option value="NO_LABORADO">❌ Día No Citado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="secDiagnostico" class="hidden">
+                        <input type="text" id="diagnostico" placeholder="Escribe el diagnóstico o motivo aquí..." class="w-full p-4 bg-red-50 border-2 border-red-100 rounded-xl font-medium">
+                    </div>
+
+                    <div id="secHoras" class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+                        <div class="space-y-1"><label class="text-[10px] font-black text-indigo-400 uppercase">Entrada</label><input type="time" id="hInicio" class="w-full p-3 rounded-lg border shadow-sm font-bold"></div>
+                        <div class="space-y-1"><label class="text-[10px] font-black text-indigo-400 uppercase">Descanso Inicio</label><input type="time" id="hBreakOut" class="w-full p-3 rounded-lg border shadow-sm font-bold"></div>
+                        <div class="space-y-1"><label class="text-[10px] font-black text-indigo-400 uppercase">Descanso Fin</label><input type="time" id="hBreakIn" class="w-full p-3 rounded-lg border shadow-sm font-bold"></div>
+                        <div class="space-y-1"><label class="text-[10px] font-black text-indigo-400 uppercase">Salida</label><input type="time" id="hFin" class="w-full p-3 rounded-lg border shadow-sm font-bold"></div>
+                    </div>
+
+                    <button type="submit" class="w-full py-4 bg-indigo-600 text-white font-black rounded-xl hover:bg-indigo-700 shadow-xl shadow-indigo-200 active:scale-[0.98] transition-all uppercase tracking-widest">Guardar Día en Quincena</button>
+                </form>
+            </div>
+
+            <div class="mt-10">
+                <h3 class="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
+                    <span class="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center text-sm">📅</span>
+                    Historial Registrado
+                </h3>
+                <div id="listaRegistros" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+            </div>
+        </div>
+
+        <div id="resumen" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><p class="text-xs font-black text-slate-400 uppercase">Salarial (IBC)</p><p id="resIBC" class="text-2xl font-black text-slate-800">$0</p></div>
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><p class="text-xs font-black text-green-500 uppercase">Transporte</p><p id="resTransp" class="text-2xl font-black text-green-600">$0</p></div>
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><p class="text-xs font-black text-red-400 uppercase">Deducciones (8%)</p><p id="resDeduc" class="text-2xl font-black text-red-500">-$0</p></div>
+                <div class="bg-indigo-900 p-6 rounded-2xl shadow-xl shadow-indigo-200 text-white"><p class="text-xs font-black text-indigo-300 uppercase">Neto a Recibir</p><p id="resNeto" class="text-3xl font-black">$0</p></div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                <table class="w-full">
+                    <thead><tr class="text-left text-xs font-black text-slate-400 uppercase border-b-2 border-slate-50"><th class="pb-4">Concepto</th><th class="pb-4 text-center">Cant.</th><th class="pb-4 text-right">Valor</th></tr></thead>
+                    <tbody id="resDetalleTable" class="divide-y divide-slate-50"></tbody>
+                </table>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <button onclick="exportarPDF()" class="bg-slate-900 text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all">Exportar PDF</button>
+                <button onclick="exportarExcel()" class="bg-emerald-600 text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-emerald-700 transition-all">Exportar Excel</button>
+                <button onclick="clearQuincena()" class="bg-rose-50 text-rose-600 border-2 border-rose-100 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all">Cerrar Quincena</button>
+            </div>
+        </div>
+
+        <div id="config" class="tab-content hidden space-y-6">
+            <div class="bg-white p-8 rounded-2xl border border-slate-200 shadow-xl">
+                <h2 class="text-2xl font-black text-indigo-900 mb-6 uppercase border-b-4 border-indigo-50 pb-2">Configuración Maestra</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="space-y-4">
+                        <h3 class="font-black text-slate-400 text-xs uppercase tracking-tighter">Valores Base (COP)</h3>
+                        <div><label class="text-xs font-bold text-slate-600">VALOR HORA ORDINARIA</label><input type="number" id="cfgHora" class="w-full mt-1 p-3 bg-slate-50 border rounded-lg font-bold"></div>
+                        <div><label class="text-xs font-bold text-slate-600">AUXILIO TRANSPORTE MENSUAL</label><input type="number" id="cfgTransp" class="w-full mt-1 p-3 bg-slate-50 border rounded-lg font-bold"></div>
+                    </div>
+                    <div class="space-y-4">
+                        <h3 class="font-black text-slate-400 text-xs uppercase tracking-tighter">Recargos de Ley (%)</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="text-[10px] font-bold">NOCTURNO</label><input type="number" id="cfgRN" class="w-full p-2 bg-slate-50 border rounded-lg font-bold"></div>
+                            <div><label class="text-[10px] font-bold">DOM/FEST</label><input type="number" id="cfgDOM" class="w-full p-2 bg-slate-50 border rounded-lg font-bold"></div>
+                            <div><label class="text-[10px] font-bold">EXTRA DIURNA</label><input type="number" id="cfgHED" class="w-full p-2 bg-slate-50 border rounded-lg font-bold"></div>
+                            <div><label class="text-[10px] font-bold">EXTRA NOC.</label><input type="number" id="cfgHEN" class="w-full p-2 bg-slate-50 border rounded-lg font-bold"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-8 p-6 bg-slate-50 rounded-2xl border-2 border-slate-100">
+                    <h3 class="font-black text-slate-800 text-sm uppercase mb-4">Días Festivos 2026 Cargados</h3>
+                    <div id="festivosList" class="flex flex-wrap gap-2"></div>
+                </div>
+                <button onclick="saveConfig()" class="w-full mt-8 bg-indigo-600 text-white py-4 rounded-xl font-black shadow-lg hover:shadow-indigo-200 transition-all uppercase">Actualizar Todo</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const cfgDefault = { hora: 7959, rn: 35, dom: 80, hed: 25, hen: 75, hedd: 105, hend: 155, auxTranspMensual: 250000 };
+        let cfg = JSON.parse(localStorage.getItem('cfg_v4')) || cfgDefault;
+        let db = JSON.parse(localStorage.getItem('db_v4')) || [];
+        const format = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+        const festivos = ["2026-01-01", "2026-01-12", "2026-03-23", "2026-04-02", "2026-04-03", "2026-05-01", "2026-05-18", "2026-06-08", "2026-06-15", "2026-06-29", "2026-07-20", "2026-08-07", "2026-08-17", "2026-10-12", "2026-11-02", "2026-11-16", "2026-12-08", "2026-12-25"];
+
+        function showTab(t) {
+            document.querySelectorAll('.tab-content').forEach(x => x.classList.add('hidden'));
+            document.getElementById(t).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.className = "tab-btn flex-1 py-3 px-4 rounded-lg font-bold transition-all text-slate-500 hover:bg-slate-50";
+            });
+            if(event) event.target.className = "tab-btn flex-1 py-3 px-4 rounded-lg font-bold transition-all bg-indigo-600 text-white shadow-lg";
+            if(t === 'resumen') renderAll();
+            if(t === 'config') renderFestivos();
+        }
+
+        function toggleTipoDia() {
+            const tipo = document.getElementById('tipoDia').value;
+            document.getElementById('secHoras').classList.toggle('hidden', tipo !== 'NORMAL');
+            document.getElementById('secDiagnostico').classList.toggle('hidden', tipo !== 'INCAPACIDAD' && tipo !== 'COMPENSATORIO');
+        }
+
+        function isNocturno(d) { let h = d.getHours(); return h >= 19 || h < 6; }
+        function isDomFest(d) {
+            let dateStr = d.toLocaleDateString('en-CA');
+            return d.getDay() === 0 || festivos.includes(dateStr);
+        }
+
+        document.getElementById('formTurno').onsubmit = (e) => {
+            e.preventDefault();
+            const tipo = document.getElementById('tipoDia').value;
+            const fecha = document.getElementById('fecha').value;
+            let registro = { fecha, tipo, pagoSalarial: 0, pagaTransporte: false, desglose: {}, diag: "" };
+
+            if (tipo === 'NORMAL') {
+                registro.pagaTransporte = true;
+                let start = new Date(`${fecha}T${document.getElementById('hInicio').value}`);
+                let end = new Date(`${fecha}T${document.getElementById('hFin').value}`);
+                if (end <= start) end.setDate(end.getDate() + 1);
+
+                let bO = document.getElementById('hBreakOut').value;
+                let bI = document.getElementById('hBreakIn').value;
+                let breaks = [];
+                if(bO && bI) {
+                    let dS = new Date(`${fecha}T${bO}`);
+                    let dE = new Date(`${fecha}T${bI}`);
+                    if(dS < start) dS.setDate(dS.getDate() + 1);
+                    if(dE <= dS) dE.setDate(dE.getDate() + 1);
+                    breaks.push({s:dS, e:dE});
+                }
+
+                let mins = 0;
+                let counts = { ordD: 0, ordN: 0, extD: 0, extN: 0, domD: 0, domN: 0, edd: 0, edn: 0 };
+                let cur = new Date(start);
+
+                while(cur < end) {
+                    let inBreak = breaks.some(b => cur >= b.s && cur < b.e);
+                    if(!inBreak){
+                        mins++;
+                        let fest = isDomFest(cur);
+                        let noc = isNocturno(cur);
+                        let ext = mins > 480; 
+                        if(!ext && !fest && !noc) counts.ordD++;
+                        else if(!ext && !fest && noc) counts.ordN++;
+                        else if(ext && !fest && !noc) counts.extD++;
+                        else if(ext && !fest && noc) counts.extN++;
+                        else if(!ext && fest && !noc) counts.domD++;
+                        else if(!ext && fest && noc) counts.domN++;
+                        else if(ext && fest && !noc) counts.edd++;
+                        else if(ext && fest && noc) counts.edn++;
+                    }
+                    cur.setMinutes(cur.getMinutes() + 1);
+                }
+
+                const prices = {
+                    ordD: cfg.hora, ordN: cfg.hora * (1 + cfg.rn/100), extD: cfg.hora * (1 + cfg.hed/100), 
+                    extN: cfg.hora * (1 + cfg.hen/100), domD: cfg.hora * (1 + cfg.dom/100), 
+                    domN: cfg.hora * (1 + cfg.dom/100 + cfg.rn/100), edd: cfg.hora * (1 + cfg.hedd/100), edn: cfg.hora * (1 + cfg.hend/100)
+                };
+
+                for(let k in counts) {
+                    let h = counts[k]/60;
+                    if(h > 0) {
+                        let v = h * prices[k];
+                        registro.desglose[k] = { h: h.toFixed(2), v };
+                        registro.pagoSalarial += v;
+                    }
+                }
+            } else if (tipo === 'COMPENSATORIO') {
+                registro.diag = document.getElementById('diagnostico').value || "Día compensatorio";
+                registro.pagoSalarial = cfg.hora * 7.33;
+                registro.desglose['COMPENSATORIO'] = { h: 7.33, v: registro.pagoSalarial };
+            } else if (tipo === 'INCAPACIDAD') {
+                registro.diag = document.getElementById('diagnostico').value || "Incapacidad General";
+                registro.pagoSalarial = (cfg.hora * 8) * 0.6667;
+                registro.desglose['INCAP'] = { h: 1, v: registro.pagoSalarial };
+            }
+
+            db = db.filter(x => x.fecha !== fecha);
+            db.push(registro);
+            db.sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+            localStorage.setItem('db_v4', JSON.stringify(db));
+            renderAll();
+            e.target.reset();
+            toggleTipoDia();
+            alert("✅ Día guardado correctamente");
+        };
+
+        function renderAll() {
+            const list = document.getElementById('listaRegistros');
+            list.innerHTML = "";
+            db.forEach(r => {
+                let color = r.tipo === 'NORMAL' ? 'border-indigo-100' : 'border-rose-100 bg-rose-50/30';
+                list.innerHTML += `<div class="p-4 bg-white border-2 ${color} rounded-2xl flex justify-between items-center shadow-sm">
+                    <div><p class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">${r.fecha}</p>
+                    <p class="text-sm font-black text-slate-700">${r.tipo === 'NORMAL' ? 'Turno Laborado' : (r.tipo === 'COMPENSATORIO' ? '🌟 Compensatorio' : r.diag)}</p></div>
+                    <div class="text-right"><p class="text-sm font-black text-indigo-600">${format.format(r.pagoSalarial)}</p>
+                    <button onclick="deleteReg('${r.fecha}')" class="text-[9px] font-black text-rose-400 hover:text-rose-600 uppercase">Eliminar</button></div></div>`;
+            });
+
+            let ibc = 0, diasT = 0;
+            let sumas = {};
+            const labels = { ordD:'H. Ordinaria', ordN:'Recargo Noct.', extD:'Ex. Diurna', extN:'Ex. Nocturna', domD:'Dom/Fest Diur.', domN:'Dom/Fest Noc.', edd:'Ex. Dom. Diur.', edn:'Ex. Dom. Noc.', INCAP:'Incapacidad', COMPENSATORIO:'Compensatorio' };
+
+            db.forEach(r => {
+                ibc += r.pagoSalarial;
+                if(r.pagaTransporte) diasT++;
+                for(let k in r.desglose){
+                    if(!sumas[k]) sumas[k] = {h:0, v:0};
+                    sumas[k].h += parseFloat(r.desglose[k].h);
+                    sumas[k].v += r.desglose[k].v;
+                }
+            });
+
+            let tr = (cfg.auxTranspMensual / 30) * diasT;
+            let de = ibc * 0.08;
+            document.getElementById('resIBC').innerText = format.format(ibc);
+            document.getElementById('resTransp').innerText = format.format(tr);
+            document.getElementById('resDeduc').innerText = "-" + format.format(de);
+            document.getElementById('resNeto').innerText = format.format(ibc + tr - de);
+
+            const table = document.getElementById('resDetalleTable');
+            table.innerHTML = "";
+            for(let k in sumas){
+                table.innerHTML += `<tr class="hover:bg-slate-50 transition-all"><td class="py-4 font-bold text-slate-700">${labels[k] || k}</td>
+                    <td class="py-4 text-center font-black text-slate-400">${sumas[k].h.toFixed(2)}</td>
+                    <td class="py-4 text-right font-black text-slate-800">${format.format(sumas[k].v)}</td></tr>`;
+            }
+        }
+
+        function renderFestivos() {
+            const container = document.getElementById('festivosList');
+            container.innerHTML = festivos.map(f => `<span class="bg-indigo-50 text-indigo-600 text-[10px] px-2 py-1 rounded-lg font-bold">${f}</span>`).join("");
+        }
+
+        function deleteReg(f) { if(confirm("¿Eliminar este registro?")){ db = db.filter(x => x.fecha !== f); localStorage.setItem('db_v4', JSON.stringify(db)); renderAll(); } }
+        function clearQuincena() { if(confirm("⚠️ ¿Deseas borrar toda la quincena?")){ db = []; localStorage.setItem('db_v4', JSON.stringify(db)); renderAll(); } }
+        function saveConfig() {
+            cfg.hora = parseFloat(document.getElementById('cfgHora').value);
+            cfg.auxTranspMensual = parseFloat(document.getElementById('cfgTransp').value);
+            cfg.rn = parseFloat(document.getElementById('cfgRN').value);
+            cfg.dom = parseFloat(document.getElementById('cfgDOM').value);
+            cfg.hed = parseFloat(document.getElementById('cfgHED').value);
+            cfg.hen = parseFloat(document.getElementById('cfgHEN').value);
+            localStorage.setItem('cfg_v4', JSON.stringify(cfg));
+            alert("✅ Configuración actualizada.");
+            renderAll();
+        }
+
+        function exportarPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text("REPORTE DE NÓMINA", 14, 20);
+            const rows = db.map(r => [r.fecha, r.tipo, format.format(r.pagoSalarial)]);
+            doc.autoTable({ startY: 30, head: [['Fecha', 'Tipo', 'Pago']], body: rows });
+            doc.save(`Nomina_${new Date().toISOString().split('T')[0]}.pdf`);
+        }
+
+        function exportarExcel() {
+            const data = db.map(r => ({ Fecha: r.fecha, Tipo: r.tipo, Pago: r.pagoSalarial }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Quincena");
+            XLSX.writeFile(wb, "Nomina.xlsx");
+        }
+
+        document.getElementById('cfgHora').value = cfg.hora;
+        document.getElementById('cfgTransp').value = cfg.auxTranspMensual;
+        document.getElementById('cfgRN').value = cfg.rn;
+        document.getElementById('cfgDOM').value = cfg.dom;
+        document.getElementById('cfgHED').value = cfg.hed;
+        document.getElementById('cfgHEN').value = cfg.hen;
+        renderAll();
+    </script>
+</body>
+</html>
