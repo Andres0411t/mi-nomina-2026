@@ -28,7 +28,7 @@
                     <span id="darkIcon">🌙</span>
                 </button>
                 <div class="text-right hidden sm:block">
-                    <span class="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1 rounded-full uppercase">Versión 1.2</span>
+                    <span class="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1 rounded-full uppercase">Versión 1.3</span>
                 </div>
             </div>
         </header>
@@ -69,7 +69,7 @@
                         <div class="space-y-1"><label class="text-[10px] font-black text-indigo-400 uppercase">Salida</label><input type="time" id="hFin" class="w-full p-3 rounded-lg border dark:bg-slate-700 dark:border-slate-600 shadow-sm font-bold dark:text-white"></div>
                     </div>
 
-                    <button type="submit" class="w-full py-4 bg-indigo-600 text-white font-black rounded-xl hover:bg-indigo-700 shadow-xl shadow-indigo-200 dark:shadow-none active:scale-[0.98] transition-all uppercase tracking-widest">Guardar Día en Quincena</button>
+                    <button type="submit" id="btnGuardar" class="w-full py-4 bg-indigo-600 text-white font-black rounded-xl hover:bg-indigo-700 shadow-xl shadow-indigo-200 dark:shadow-none active:scale-[0.98] transition-all uppercase tracking-widest">Guardar Día en Quincena</button>
                 </form>
             </div>
 
@@ -181,7 +181,9 @@
             document.getElementById('secDiagnostico').classList.toggle('hidden', tipo !== 'INCAPACIDAD' && tipo !== 'COMPENSATORIO');
         }
 
+        
         function isNocturno(d) { let h = d.getHours(); return h >= 19 || h < 6; }
+        
         function isDomFest(d) {
             let dateStr = d.toLocaleDateString('en-CA');
             return d.getDay() === 0 || festivos.includes(dateStr);
@@ -191,24 +193,28 @@
             e.preventDefault();
             const tipo = document.getElementById('tipoDia').value;
             const fecha = document.getElementById('fecha').value;
-            let registro = { fecha, tipo, pagoSalarial: 0, pagaTransporte: false, desglose: {}, diag: "" };
+            let registro = { fecha, tipo, pagoSalarial: 0, pagaTransporte: false, desglose: {}, diag: "", rawHoras: null };
 
             if (tipo === 'NORMAL') {
                 registro.pagaTransporte = true;
                 let hI = document.getElementById('hInicio').value;
                 let hF = document.getElementById('hFin').value;
+                let hBO = document.getElementById('hBreakOut').value;
+                let hBI = document.getElementById('hBreakIn').value;
+
                 if(!hI || !hF) return alert("Ingresa entrada y salida");
+
+                // Guardamos las horas ingresadas para poder editarlas o verlas después
+                registro.rawHoras = { hI, hF, hBO, hBI };
 
                 let start = new Date(`${fecha}T${hI}`);
                 let end = new Date(`${fecha}T${hF}`);
                 if (end <= start) end.setDate(end.getDate() + 1);
 
-                let bO = document.getElementById('hBreakOut').value;
-                let bI = document.getElementById('hBreakIn').value;
                 let breaks = [];
-                if(bO && bI) {
-                    let dS = new Date(`${fecha}T${bO}`);
-                    let dE = new Date(`${fecha}T${bI}`);
+                if(hBO && hBI) {
+                    let dS = new Date(`${fecha}T${hBO}`);
+                    let dE = new Date(`${fecha}T${hBI}`);
                     if(dS < start) dS.setDate(dS.getDate() + 1);
                     if(dE <= dS) dE.setDate(dE.getDate() + 1);
                     breaks.push({s:dS, e:dE});
@@ -261,26 +267,75 @@
                 registro.desglose['INCAP'] = { h: 1, v: registro.pagoSalarial };
             }
 
-            db = db.filter(x => x.fecha !== fecha);
+            db = db.filter(x => x.fecha !== fecha); // Sobrescribe si existe la misma fecha
             db.push(registro);
             db.sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
             localStorage.setItem('db_v4', JSON.stringify(db));
+            
+            document.getElementById('btnGuardar').innerText = "Guardar Día en Quincena";
+            document.getElementById('btnGuardar').classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+            
             renderAll();
             e.target.reset();
             toggleTipoDia();
             alert("✅ Día guardado correctamente");
         };
 
+        // --- FUNCIÓN PARA EDITAR REGISTROS ---
+        function editReg(fecha) {
+            const r = db.find(x => x.fecha === fecha);
+            if(!r) return;
+            
+            document.getElementById('fecha').value = r.fecha;
+            document.getElementById('tipoDia').value = r.tipo;
+            toggleTipoDia();
+            
+            if(r.tipo === 'NORMAL' && r.rawHoras) {
+                document.getElementById('hInicio').value = r.rawHoras.hI || '';
+                document.getElementById('hBreakOut').value = r.rawHoras.hBO || '';
+                document.getElementById('hBreakIn').value = r.rawHoras.hBI || '';
+                document.getElementById('hFin').value = r.rawHoras.hF || '';
+            } else {
+                document.getElementById('diagnostico').value = r.diag || '';
+            }
+            
+            // Cambiamos el botón para que el usuario sepa que está editando
+            const btn = document.getElementById('btnGuardar');
+            btn.innerText = "Actualizar Día Registrado";
+            btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+            
+            // Subimos la pantalla hacia el formulario
+            showTab('registro');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
         function renderAll() {
             const list = document.getElementById('listaRegistros');
             list.innerHTML = "";
             db.forEach(r => {
                 let color = r.tipo === 'NORMAL' ? 'border-indigo-100 dark:border-indigo-900/30' : 'border-rose-100 dark:border-rose-900/30 bg-rose-50/30 dark:bg-rose-900/10';
+                
+                // Mostrar horas si están disponibles
+                let horasHtml = '';
+                if (r.tipo === 'NORMAL' && r.rawHoras) {
+                    let descanso = (r.rawHoras.hBO && r.rawHoras.hBI) ? ` | ☕ ${r.rawHoras.hBO} - ${r.rawHoras.hBI}` : '';
+                    horasHtml = `<p class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-1">⏱️ ${r.rawHoras.hI} a ${r.rawHoras.hF}${descanso}</p>`;
+                }
+
                 list.innerHTML += `<div class="p-4 bg-white dark:bg-slate-800 border-2 ${color} rounded-2xl flex justify-between items-center shadow-sm">
-                    <div><p class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">${r.fecha}</p>
-                    <p class="text-sm font-black text-slate-700 dark:text-slate-200">${r.tipo === 'NORMAL' ? 'Turno Laborado' : (r.tipo === 'COMPENSATORIO' ? '🌟 Compensatorio' : r.diag)}</p></div>
-                    <div class="text-right"><p class="text-sm font-black text-indigo-600 dark:text-indigo-400">${format.format(r.pagoSalarial)}</p>
-                    <button onclick="deleteReg('${r.fecha}')" class="text-[9px] font-black text-rose-400 hover:text-rose-600 uppercase">Eliminar</button></div></div>`;
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">${r.fecha}</p>
+                        <p class="text-sm font-black text-slate-700 dark:text-slate-200">${r.tipo === 'NORMAL' ? 'Turno Laborado' : (r.tipo === 'COMPENSATORIO' ? '🌟 Compensatorio' : r.diag)}</p>
+                        ${horasHtml}
+                    </div>
+                    <div class="text-right flex flex-col items-end">
+                        <p class="text-sm font-black text-indigo-600 dark:text-indigo-400">${format.format(r.pagoSalarial)}</p>
+                        <div class="flex gap-3 mt-1">
+                            <button onclick="editReg('${r.fecha}')" class="text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase transition-colors">Editar</button>
+                            <button onclick="deleteReg('${r.fecha}')" class="text-[10px] font-black text-rose-400 hover:text-rose-600 uppercase transition-colors">Borrar</button>
+                        </div>
+                    </div>
+                </div>`;
             });
 
             let ibc = 0, diasT = 0;
@@ -361,13 +416,33 @@
             reader.readAsText(file);
         }
 
+        // --- ACTUALIZACIÓN DE PDF CON DETALLE DE HORAS ---
         function exportarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             doc.setFontSize(18);
             doc.text("REPORTE DE NÓMINA QUINCENAL", 14, 20);
-            const rows = db.map(r => [r.fecha, r.tipo, format.format(r.pagoSalarial)]);
-            doc.autoTable({ startY: 35, head: [['Fecha', 'Estado/Turno', 'Valor Salarial']], body: rows });
+            
+            const rows = db.map(r => {
+                let horasTexto = "-";
+                if(r.tipo === 'NORMAL') {
+                    let desgloseArray = [];
+                    if(r.desglose.ordD) desgloseArray.push(`Ord: ${r.desglose.ordD.h}h`);
+                    if(r.desglose.ordN) desgloseArray.push(`Noc: ${r.desglose.ordN.h}h`);
+                    if(r.desglose.extD) desgloseArray.push(`Ex.Diur: ${r.desglose.extD.h}h`);
+                    if(r.desglose.extN) desgloseArray.push(`Ex.Noc: ${r.desglose.extN.h}h`);
+                    if(r.desglose.domD) desgloseArray.push(`Dom/Fest: ${r.desglose.domD.h}h`);
+                    horasTexto = desgloseArray.join(', ');
+                }
+                return [r.fecha, r.tipo, horasTexto, format.format(r.pagoSalarial)];
+            });
+
+            doc.autoTable({ 
+                startY: 35, 
+                head: [['Fecha', 'Estado/Turno', 'Horas (D/N/Ext)', 'Valor Salarial']], 
+                body: rows,
+                styles: { fontSize: 9 }
+            });
             doc.save(`Nomina_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
