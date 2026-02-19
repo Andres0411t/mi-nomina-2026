@@ -204,7 +204,7 @@
 
                 if(!hI || !hF) return alert("Ingresa entrada y salida");
 
-                // horas ingresadas para poder editarlas o verlas después
+                // Guardamos las horas ingresadas para poder editarlas o verlas después
                 registro.rawHoras = { hI, hF, hBO, hBI };
 
                 let start = new Date(`${fecha}T${hI}`);
@@ -230,7 +230,9 @@
                         mins++;
                         let fest = isDomFest(cur);
                         let noc = isNocturno(cur);
-                        let ext = mins > 480; 
+                        // CORRECCIÓN: La extra inicia después de 600 minutos trabajados (10 horas)
+                        let ext = mins > 600; 
+                        
                         if(!ext && !fest && !noc) counts.ordD++;
                         else if(!ext && !fest && noc) counts.ordN++;
                         else if(ext && !fest && !noc) counts.extD++;
@@ -299,9 +301,9 @@
                 document.getElementById('diagnostico').value = r.diag || '';
             }
             
-            // botón para que el usuario sepa que está editando
+            // Cambiamos el botón para que el usuario sepa que está editando
             const btn = document.getElementById('btnGuardar');
-            btn.innerText = "Guardar Día en Quincena";
+            btn.innerText = "Actualizar Día Registrado";
             btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
             
             // Subimos la pantalla hacia el formulario
@@ -416,7 +418,7 @@
             reader.readAsText(file);
         }
 
-  
+        // --- ACTUALIZACIÓN DE PDF CON DETALLE DE HORAS ---
         function exportarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
