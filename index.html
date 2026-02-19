@@ -204,7 +204,7 @@
 
                 if(!hI || !hF) return alert("Ingresa entrada y salida");
 
-                // Guardamos las horas ingresadas para poder editarlas o verlas después
+                // horas ingresadas para poder editarlas o verlas después
                 registro.rawHoras = { hI, hF, hBO, hBI };
 
                 let start = new Date(`${fecha}T${hI}`);
@@ -299,7 +299,7 @@
                 document.getElementById('diagnostico').value = r.diag || '';
             }
             
-            // Cambiamos el botón para que el usuario sepa que está editando
+            // botón para que el usuario sepa que está editando
             const btn = document.getElementById('btnGuardar');
             btn.innerText = "Guardar Día en Quincena";
             btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
@@ -416,7 +416,7 @@
             reader.readAsText(file);
         }
 
-        // --- ACTUALIZACIÓN DE PDF CON DETALLE DE HORAS ---
+  
         function exportarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
