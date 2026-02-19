@@ -6,7 +6,6 @@
     <title>Calculador de Nómina</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        // Configuración de modo oscuro
         tailwind.config = {
             darkMode: 'class'
         }
@@ -14,6 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300">
 
@@ -28,7 +28,7 @@
                     <span id="darkIcon">🌙</span>
                 </button>
                 <div class="text-right hidden sm:block">
-                    <span class="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1 rounded-full uppercase">Versión 1.3</span>
+                    <span class="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1 rounded-full uppercase">Versión 1.4</span>
                 </div>
             </div>
         </header>
@@ -89,6 +89,14 @@
                 <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm"><p class="text-xs font-black text-red-400 uppercase">Deducciones (8%)</p><p id="resDeduc" class="text-2xl font-black text-red-500">-$0</p></div>
                 <div class="bg-indigo-900 p-6 rounded-2xl shadow-xl shadow-indigo-200 dark:shadow-none text-white"><p class="text-xs font-black text-indigo-300 uppercase">Neto a Recibir</p><p id="resNeto" class="text-3xl font-black">$0</p></div>
             </div>
+
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest text-center">Distribución de Horas y Recargos</h3>
+                <div class="h-[250px] flex justify-center">
+                    <canvas id="nominaChart"></canvas>
+                </div>
+            </div>
+
             <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-x-auto">
                 <table class="w-full">
                     <thead><tr class="text-left text-xs font-black text-slate-400 uppercase border-b-2 border-slate-50 dark:border-slate-700"><th class="pb-4">Concepto</th><th class="pb-4 text-center">Cant.</th><th class="pb-4 text-right">Valor</th></tr></thead>
@@ -150,13 +158,16 @@
         let db = JSON.parse(localStorage.getItem('db_v4')) || [];
         const format = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
         const festivos = ["2026-01-01", "2026-01-12", "2026-03-23", "2026-04-02", "2026-04-03", "2026-05-01", "2026-05-18", "2026-06-08", "2026-06-15", "2026-06-29", "2026-07-20", "2026-08-07", "2026-08-17", "2026-10-12", "2026-11-02", "2026-11-16", "2026-12-08", "2026-12-25"];
+        
+        // --- VARIABLE PARA LA GRÁFICA ---
+        let miGrafica = null;
 
-        // --- MODO OSCURO ---
         function toggleDarkMode() {
             document.documentElement.classList.toggle('dark');
             const isDark = document.documentElement.classList.contains('dark');
             localStorage.setItem('darkMode', isDark);
             document.getElementById('darkIcon').innerText = isDark ? '☀️' : '🌙';
+            if(miGrafica) renderChart([]); // Refresca colores si cambia el modo
         }
 
         if (localStorage.getItem('darkMode') === 'true') {
@@ -181,7 +192,6 @@
             document.getElementById('secDiagnostico').classList.toggle('hidden', tipo !== 'INCAPACIDAD' && tipo !== 'COMPENSATORIO');
         }
 
-        
         function isNocturno(d) { let h = d.getHours(); return h >= 19 || h < 6; }
         
         function isDomFest(d) {
@@ -204,9 +214,7 @@
 
                 if(!hI || !hF) return alert("Ingresa entrada y salida");
 
-                // Guardamos las horas ingresadas para poder editarlas o verlas después
                 registro.rawHoras = { hI, hF, hBO, hBI };
-
                 let start = new Date(`${fecha}T${hI}`);
                 let end = new Date(`${fecha}T${hF}`);
                 if (end <= start) end.setDate(end.getDate() + 1);
@@ -230,7 +238,6 @@
                         mins++;
                         let fest = isDomFest(cur);
                         let noc = isNocturno(cur);
-                        // CORRECCIÓN: La extra inicia después de 600 minutos trabajados (10 horas)
                         let ext = mins > 600; 
                         
                         if(!ext && !fest && !noc) counts.ordD++;
@@ -269,7 +276,7 @@
                 registro.desglose['INCAP'] = { h: 1, v: registro.pagoSalarial };
             }
 
-            db = db.filter(x => x.fecha !== fecha); // Sobrescribe si existe la misma fecha
+            db = db.filter(x => x.fecha !== fecha);
             db.push(registro);
             db.sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
             localStorage.setItem('db_v4', JSON.stringify(db));
@@ -283,15 +290,12 @@
             alert("✅ Día guardado correctamente");
         };
 
-        // --- FUNCIÓN PARA EDITAR REGISTROS ---
         function editReg(fecha) {
             const r = db.find(x => x.fecha === fecha);
             if(!r) return;
-            
             document.getElementById('fecha').value = r.fecha;
             document.getElementById('tipoDia').value = r.tipo;
             toggleTipoDia();
-            
             if(r.tipo === 'NORMAL' && r.rawHoras) {
                 document.getElementById('hInicio').value = r.rawHoras.hI || '';
                 document.getElementById('hBreakOut').value = r.rawHoras.hBO || '';
@@ -300,15 +304,63 @@
             } else {
                 document.getElementById('diagnostico').value = r.diag || '';
             }
-            
-            // Cambiamos el botón para que el usuario sepa que está editando
             const btn = document.getElementById('btnGuardar');
             btn.innerText = "Actualizar Día Registrado";
             btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
-            
-            // Subimos la pantalla hacia el formulario
             showTab('registro');
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // --- FUNCIÓN PARA RENDERIZAR GRÁFICA ---
+        function renderChart(sumas) {
+            const ctx = document.getElementById('nominaChart').getContext('2d');
+            const labels = { ordD:'Ordinaria', ordN:'Rec. Noc', extD:'Ext. Diu', extN:'Ext. Noc', domD:'Dom/Fest', domN:'Dom Noc', edd:'Ex.Dom.D', edn:'Ex.Dom.N', INCAP:'Incap.', COMPENSATORIO:'Compens.' };
+            
+            const dataLabels = [];
+            const dataValues = [];
+            const colors = {
+                ordD: '#6366f1', ordN: '#4338ca', extD: '#f59e0b', extN: '#d97706',
+                domD: '#10b981', domN: '#047857', edd: '#f43f5e', edn: '#be123c',
+                INCAP: '#94a3b8', COMPENSATORIO: '#8b5cf6'
+            };
+            const backgroundColors = [];
+
+            for(let k in sumas) {
+                dataLabels.push(labels[k] || k);
+                dataValues.push(sumas[k].h);
+                backgroundColors.push(colors[k] || '#CBD5E1');
+            }
+
+            if(miGrafica) miGrafica.destroy();
+
+            miGrafica = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: dataLabels,
+                    datasets: [{
+                        data: dataValues,
+                        backgroundColor: backgroundColors,
+                        borderWidth: 0,
+                        hoverOffset: 15
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b',
+                                font: { weight: 'bold', size: 10 },
+                                padding: 15,
+                                usePointStyle: true
+                            }
+                        }
+                    },
+                    cutout: '70%'
+                }
+            });
         }
 
         function renderAll() {
@@ -316,8 +368,6 @@
             list.innerHTML = "";
             db.forEach(r => {
                 let color = r.tipo === 'NORMAL' ? 'border-indigo-100 dark:border-indigo-900/30' : 'border-rose-100 dark:border-rose-900/30 bg-rose-50/30 dark:bg-rose-900/10';
-                
-                // Mostrar horas si están disponibles
                 let horasHtml = '';
                 if (r.tipo === 'NORMAL' && r.rawHoras) {
                     let descanso = (r.rawHoras.hBO && r.rawHoras.hBI) ? ` | ☕ ${r.rawHoras.hBO} - ${r.rawHoras.hBI}` : '';
@@ -342,7 +392,7 @@
 
             let ibc = 0, diasT = 0;
             let sumas = {};
-            const labels = { ordD:'H. Ordinaria', ordN:'Recargo Noct.', extD:'Ex. Diurna', extN:'Ex. Nocturna', domD:'Dom/Fest Diur.', domN:'Dom/Fest Noc.', edd:'Ex. Dom. Diur.', edn:'Ex. Dom. Noc.', INCAP:'Incapacidad', COMPENSATORIO:'Compensatorio' };
+            const labelsTable = { ordD:'H. Ordinaria', ordN:'Recargo Noct.', extD:'Ex. Diurna', extN:'Ex. Nocturna', domD:'Dom/Fest Diur.', domN:'Dom/Fest Noc.', edd:'Ex. Dom. Diur.', edn:'Ex. Dom. Noc.', INCAP:'Incapacidad', COMPENSATORIO:'Compensatorio' };
 
             db.forEach(r => {
                 ibc += r.pagoSalarial;
@@ -354,6 +404,8 @@
                 }
             });
 
+            renderChart(sumas); // Actualiza la gráfica
+
             let tr = (cfg.auxTranspMensual / 30) * diasT;
             let de = ibc * 0.08;
             document.getElementById('resIBC').innerText = format.format(ibc);
@@ -364,7 +416,7 @@
             const table = document.getElementById('resDetalleTable');
             table.innerHTML = "";
             for(let k in sumas){
-                table.innerHTML += `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"><td class="py-4 font-bold text-slate-700 dark:text-slate-300">${labels[k] || k}</td>
+                table.innerHTML += `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"><td class="py-4 font-bold text-slate-700 dark:text-slate-300">${labelsTable[k] || k}</td>
                     <td class="py-4 text-center font-black text-slate-400">${sumas[k].h.toFixed(2)}</td>
                     <td class="py-4 text-right font-black text-slate-800 dark:text-slate-100">${format.format(sumas[k].v)}</td></tr>`;
             }
@@ -418,13 +470,11 @@
             reader.readAsText(file);
         }
 
-        // --- ACTUALIZACIÓN DE PDF CON DETALLE DE HORAS ---
         function exportarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             doc.setFontSize(18);
             doc.text("REPORTE DE NÓMINA QUINCENAL", 14, 20);
-            
             const rows = db.map(r => {
                 let horasTexto = "-";
                 if(r.tipo === 'NORMAL') {
@@ -438,13 +488,7 @@
                 }
                 return [r.fecha, r.tipo, horasTexto, format.format(r.pagoSalarial)];
             });
-
-            doc.autoTable({ 
-                startY: 35, 
-                head: [['Fecha', 'Estado/Turno', 'Horas (D/N/Ext)', 'Valor Salarial']], 
-                body: rows,
-                styles: { fontSize: 9 }
-            });
+            doc.autoTable({ startY: 35, head: [['Fecha', 'Estado/Turno', 'Horas (D/N/Ext)', 'Valor Salarial']], body: rows, styles: { fontSize: 9 } });
             doc.save(`Nomina_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
