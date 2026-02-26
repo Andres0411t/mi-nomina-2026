@@ -28,7 +28,7 @@
                     <span id="darkIcon">🌙</span>
                 </button>
                 <div class="text-right hidden sm:block">
-                    <span class="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1 rounded-full uppercase">Versión 1.4</span>
+                    <span class="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1 rounded-full uppercase">Versión 1.5</span>
                 </div>
             </div>
         </header>
@@ -108,7 +108,15 @@
                 <button onclick="exportarExcel()" class="bg-emerald-600 text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-emerald-700 transition-all">Exportar Excel</button>
                 <button onclick="clearQuincena()" class="bg-rose-50 dark:bg-rose-900/10 text-rose-600 dark:text-rose-400 border-2 border-rose-100 dark:border-rose-900/30 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all">Cerrar Quincena</button>
             </div>
-        </div>
+
+            <div id="secHistorial" class="hidden bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm mt-8">
+                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span class="w-6 h-6 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 rounded-md flex items-center justify-center text-xs">📚</span>
+                    Bitácora de Quincenas Pasadas
+                </h3>
+                <div id="listaHistorial" class="space-y-3"></div>
+            </div>
+            </div>
 
         <div id="config" class="tab-content hidden space-y-6">
             <div class="bg-white dark:bg-slate-800 p-8 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl">
@@ -149,10 +157,10 @@
         const cfgDefault = { hora: 7959, rn: 35, dom: 80, hed: 25, hen: 75, hedd: 105, hend: 155, auxTranspMensual: 250000 };
         let cfg = JSON.parse(localStorage.getItem('cfg_v4')) || cfgDefault;
         let db = JSON.parse(localStorage.getItem('db_v4')) || [];
+        let historialDB = JSON.parse(localStorage.getItem('historial_v4')) || []; // VARIABLE NUEVA
         const format = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
         const festivos = ["2026-01-01", "2026-01-12", "2026-03-23", "2026-04-02", "2026-04-03", "2026-05-01", "2026-05-18", "2026-06-08", "2026-06-15", "2026-06-29", "2026-07-20", "2026-08-07", "2026-08-17", "2026-10-12", "2026-11-02", "2026-11-16", "2026-12-08", "2026-12-25"];
         
-        // Variable para la instancia del gráfico
         let myChart = null;
 
         function toggleDarkMode() {
@@ -160,7 +168,7 @@
             const isDark = document.documentElement.classList.contains('dark');
             localStorage.setItem('darkMode', isDark);
             document.getElementById('darkIcon').innerText = isDark ? '☀️' : '🌙';
-            if(myChart) renderAll(); // Refrescar gráfica por colores de fuente
+            if(myChart) renderAll();
         }
 
         if (localStorage.getItem('darkMode') === 'true') {
@@ -251,7 +259,6 @@
                     }
                 }
             } else if (tipo === 'COMPENSATORIO') {
-                // ARREGLO DEL AUXILIO DE TRANSPORTE
                 registro.pagaTransporte = true;
                 registro.diag = document.getElementById('diagnostico').value || "Día compensatorio";
                 registro.pagoSalarial = cfg.hora * 7.33;
@@ -294,7 +301,6 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // --- FUNCIÓN PARA LA GRÁFICA ---
         function renderChart(sumas) {
             const ctx = document.getElementById('nominaChart').getContext('2d');
             const labelsMap = { ordD:'H. Ordinaria', ordN:'Rec. Noct.', extD:'Ex. Diurna', extN:'Ex. Nocturna', domD:'Dom/Fest Diur.', domN:'Dom/Fest Noc.', edd:'Ex. Dom. Diur.', edn:'Ex. Dom. Noc.', INCAP:'Incapacidad', COMPENSATORIO:'Compensatorio' };
@@ -310,7 +316,7 @@
 
             for(let k in sumas) {
                 dataLabels.push(labelsMap[k] || k);
-                dataValues.push(sumas[k].v); // Representar DINERO
+                dataValues.push(sumas[k].v);
                 backgroundColors.push(colors[k] || '#CBD5E1');
             }
 
@@ -376,7 +382,6 @@
                 }
             });
 
-            // Llamar a la gráfica con los totales
             renderChart(sumas);
 
             let tr = (cfg.auxTranspMensual / 30) * diasT;
@@ -393,15 +398,109 @@
             }
         }
 
-        // Resto de funciones (Configuración, Backups, Exportación)
         function renderFestivos() { document.getElementById('festivosList').innerHTML = festivos.map(f => `<span class="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 text-[10px] px-2 py-1 rounded-lg font-bold border border-indigo-100 dark:border-indigo-900/30">${f}</span>`).join(""); }
-        function deleteReg(f) { if(confirm("¿Eliminar este registro?")){ db = db.filter(x => x.fecha !== f); localStorage.setItem('db_v4', JSON.stringify(db)); renderAll(); } }
-        function clearQuincena() { if(confirm("⚠️ ¿Deseas borrar toda la quincena?")){ db = []; localStorage.setItem('db_v4', JSON.stringify(db)); renderAll(); } }
-        function saveConfig() { cfg.hora = parseFloat(document.getElementById('cfgHora').value); cfg.auxTranspMensual = parseFloat(document.getElementById('cfgTransp').value); cfg.rn = parseFloat(document.getElementById('cfgRN').value); cfg.dom = parseFloat(document.getElementById('cfgDOM').value); cfg.hed = parseFloat(document.getElementById('cfgHED').value); cfg.hen = parseFloat(document.getElementById('cfgHEN').value); localStorage.setItem('cfg_v4', JSON.stringify(cfg)); alert("✅ Configuración actualizada."); renderAll(); }
-        function downloadBackup() { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db)); const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "backup_nomina_2026.json"); document.body.appendChild(a); a.click(); a.remove(); }
-        function importBackup(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (e) => { try { const imported = JSON.parse(e.target.result); if(Array.isArray(imported)) { db = imported; localStorage.setItem('db_v4', JSON.stringify(db)); renderAll(); alert("✅ Datos importados"); } } catch (err) { alert("Error al leer archivo"); } }; reader.readAsText(file); }
         
-        //  PDF
+        function deleteReg(f) { if(confirm("¿Eliminar este registro?")){ db = db.filter(x => x.fecha !== f); localStorage.setItem('db_v4', JSON.stringify(db)); renderAll(); } }
+        
+        // --- FUNCIÓN MODIFICADA PARA GUARDAR HISTORIAL ---
+        function clearQuincena() { 
+            if(db.length === 0) return alert("⚠️ No hay registros para cerrar.");
+            
+            if(confirm("⚠️ ¿Deseas cerrar esta quincena? Se guardará el total en el historial y se limpiarán los días para empezar una nueva.")){ 
+                let ibc = 0; let diasT = 0;
+                db.forEach(r => { ibc += r.pagoSalarial; if(r.pagaTransporte) diasT++; });
+                let neto = ibc + ((cfg.auxTranspMensual / 30) * diasT) - (ibc * 0.08);
+                
+                let desde = db[0].fecha;
+                let hasta = db[db.length-1].fecha;
+                
+                historialDB.push({ id: Date.now(), desde, hasta, neto });
+                localStorage.setItem('historial_v4', JSON.stringify(historialDB));
+                
+                db = []; 
+                localStorage.setItem('db_v4', JSON.stringify(db)); 
+                renderAll(); 
+                renderHistorial();
+            } 
+        }
+
+        // --- FUNCIONES NUEVAS DEL HISTORIAL ---
+        function renderHistorial() {
+            const container = document.getElementById('secHistorial');
+            const list = document.getElementById('listaHistorial');
+            if(historialDB.length === 0) {
+                container.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+            container.classList.remove('hidden');
+            list.innerHTML = historialDB.map(h => `
+                <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-100 dark:border-slate-600 flex justify-between items-center shadow-sm">
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Período cerrado</p>
+                        <p class="text-sm font-black text-slate-700 dark:text-slate-200">${h.desde} al ${h.hasta}</p>
+                    </div>
+                    <div class="text-right flex flex-col items-end">
+                        <p class="text-sm font-black text-indigo-600 dark:text-indigo-400">${format.format(h.neto)}</p>
+                        <button onclick="borrarHistorial(${h.id})" class="text-[10px] font-black text-rose-400 hover:text-rose-600 uppercase transition-colors mt-1">Eliminar</button>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        function borrarHistorial(id) {
+            if(confirm("¿Estás seguro de eliminar este registro del historial?")) {
+                historialDB = historialDB.filter(h => h.id !== id);
+                localStorage.setItem('historial_v4', JSON.stringify(historialDB));
+                renderHistorial();
+            }
+        }
+        // --- FIN FUNCIONES NUEVAS ---
+
+        function saveConfig() { cfg.hora = parseFloat(document.getElementById('cfgHora').value); cfg.auxTranspMensual = parseFloat(document.getElementById('cfgTransp').value); cfg.rn = parseFloat(document.getElementById('cfgRN').value); cfg.dom = parseFloat(document.getElementById('cfgDOM').value); cfg.hed = parseFloat(document.getElementById('cfgHED').value); cfg.hen = parseFloat(document.getElementById('cfgHEN').value); localStorage.setItem('cfg_v4', JSON.stringify(cfg)); alert("✅ Configuración actualizada."); renderAll(); }
+        function downloadBackup() { 
+
+    const dataFull = {
+        registros: db,
+        historial: historialDB
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataFull)); 
+    const a = document.createElement('a'); 
+    a.setAttribute("href", dataStr); 
+    a.setAttribute("download", "backup_total_nomina.json"); 
+    document.body.appendChild(a); 
+    a.click(); 
+    a.remove(); 
+}
+        function importBackup(e) { 
+    const file = e.target.files[0]; 
+    if (!file) return; 
+    const reader = new FileReader(); 
+    reader.onload = (e) => { 
+        try { 
+            const imported = JSON.parse(e.target.result); 
+            
+
+            if(imported.registros && imported.historial) {
+                db = imported.registros;
+                historialDB = imported.historial;
+                alert("✅ Backup completo restaurado (Días + Historial)");
+            } else if(Array.isArray(imported)) {
+                db = imported;
+                alert("✅ Se restauraron los días (Archivo de versión antigua)");
+            }
+
+            localStorage.setItem('db_v4', JSON.stringify(db)); 
+            localStorage.setItem('historial_v4', JSON.stringify(historialDB)); 
+            renderAll(); 
+            renderHistorial();
+        } catch (err) { 
+            alert("Error al leer archivo: Formato no válido"); 
+        } 
+    }; 
+    reader.readAsText(file); 
+}
+        
         function exportarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
@@ -417,7 +516,6 @@
             doc.save(`Nomina_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
-        // EXCEL
         function exportarExcel() {
             const reporte = db.map(r => {
                 let totalHoras = Object.values(r.desglose).reduce((acc, curr) => acc + parseFloat(curr.h), 0).toFixed(2);
@@ -443,6 +541,7 @@
         document.getElementById('cfgHED').value = cfg.hed;
         document.getElementById('cfgHEN').value = cfg.hen;
         renderAll();
+        renderHistorial(); // LLAMADA INICIAL PARA MOSTRAR EL HISTORIAL SI HAY DATOS
     </script>
 </body>
 </html>
