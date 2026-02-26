@@ -251,7 +251,7 @@
                     }
                 }
             } else if (tipo === 'COMPENSATORIO') {
-                // AQUÍ EL ARREGLO DEL AUXILIO DE TRANSPORTE
+                // ARREGLO DEL AUXILIO DE TRANSPORTE
                 registro.pagaTransporte = true;
                 registro.diag = document.getElementById('diagnostico').value || "Día compensatorio";
                 registro.pagoSalarial = cfg.hora * 7.33;
@@ -401,7 +401,7 @@
         function downloadBackup() { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db)); const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "backup_nomina_2026.json"); document.body.appendChild(a); a.click(); a.remove(); }
         function importBackup(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (e) => { try { const imported = JSON.parse(e.target.result); if(Array.isArray(imported)) { db = imported; localStorage.setItem('db_v4', JSON.stringify(db)); renderAll(); alert("✅ Datos importados"); } } catch (err) { alert("Error al leer archivo"); } }; reader.readAsText(file); }
         
-        // AQUÍ EL ARREGLO DEL PDF
+        //  PDF
         function exportarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
@@ -417,7 +417,7 @@
             doc.save(`Nomina_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
-        // AQUÍ EL ARREGLO DEL EXCEL
+        // EXCEL
         function exportarExcel() {
             const reporte = db.map(r => {
                 let totalHoras = Object.values(r.desglose).reduce((acc, curr) => acc + parseFloat(curr.h), 0).toFixed(2);
